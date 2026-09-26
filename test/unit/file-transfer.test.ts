@@ -78,6 +78,18 @@ describe("file transfer path policy", () => {
     ).toThrow(/rewrite limits/);
   });
 
+  it("passes a large response through untouched when there is nothing to rewrite", () => {
+    const nodes = Array.from({ length: 800 }, (_, index) => ({
+      ref: `e${index + 1}`,
+      role: "link",
+      name: `Item ${index}`,
+      depth: 3,
+    }));
+    const response = { pageContent: "tree", nodes };
+    expect(transfer.rewriteTransferPaths(response, [])).toBe(response);
+    expect(transfer.rewriteTransferPaths(response, undefined)).toBe(response);
+  });
+
   it("normalizes local prefixes while preserving upload shape", () => {
     const normalized = transfer.validateLocalToolPaths("upload", {
       files: ["local:one.txt", "two.txt"],

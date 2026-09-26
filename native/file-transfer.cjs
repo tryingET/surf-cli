@@ -302,6 +302,9 @@ function isPlainObject(value) {
 }
 
 function rewriteTransferPaths(value, rewrites, depth = 0, seen = new Set(), budget = { remaining: 1000 }) {
+  // Nothing to rewrite: return the response as it is. The walk's budget exists to bound the
+  // rewrite, so a large response that carries no transferred path must not trip it.
+  if (depth === 0 && (!Array.isArray(rewrites) || rewrites.length === 0)) return value;
   if (budget.remaining-- <= 0 || depth > 8) throw transferError("response exceeds path rewrite limits", "SURF_TRANSFER_RESPONSE_LIMIT");
   if (value === null || value === undefined) return value;
   if (typeof value === "string") {
