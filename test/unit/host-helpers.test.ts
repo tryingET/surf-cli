@@ -210,6 +210,45 @@ describe("mapToolToMessage", () => {
       ).toMatchObject({ type: "READ_PAGE", tabId: 71, frameId: 4 });
     });
 
+    it("maps --all to the all filter, as its help says", () => {
+      expect(helpers.mapToolToMessage("page.read", { all: true }).options.filter).toBe("all");
+      expect(helpers.mapToolToMessage("page.read", {}).options.filter).toBe("interactive");
+      expect(helpers.mapToolToMessage("page.read", { filter: "all" }).options.filter).toBe("all");
+    });
+
+    it("maps --structure to the structure filter", () => {
+      expect(helpers.mapToolToMessage("page.read", { structure: true }).options.filter).toBe(
+        "structure",
+      );
+    });
+
+    it("maps --nodes to a structured full snapshot and --full-page to fullPage", () => {
+      // what the CLI actually sends: it rewrites --full-page to `fullpage` for every command
+      const msg = helpers.mapToolToMessage("page.read", { nodes: true, fullpage: true });
+      expect(msg.options).toMatchObject({ nodes: true, fullPage: true, forceFullSnapshot: true });
+      const plain = helpers.mapToolToMessage("page.read", {}).options;
+      expect(plain).not.toHaveProperty("nodes");
+      expect(plain).not.toHaveProperty("fullPage");
+    });
+
+    it("formats a nodes read as JSON with the tree text, nodes, url and title", () => {
+      const formatted = helpers.formatToolContent({
+        pageContent: 'heading "Releases" [e1]\n\n[Viewport: 1024x768]',
+        nodes: [{ ref: "e1", role: "heading", name: "Releases", depth: 0 }],
+        viewport: { width: 1024, height: 768 },
+        url: "https://example.test/",
+        title: "Example",
+      });
+      const parsed = JSON.parse(formatted[0].text);
+      expect(parsed).toEqual({
+        pageContent: 'heading "Releases" [e1]\n\n[Viewport: 1024x768]',
+        nodes: [{ ref: "e1", role: "heading", name: "Releases", depth: 0 }],
+        viewport: { width: 1024, height: 768 },
+        url: "https://example.test/",
+        title: "Example",
+      });
+    });
+
     it("throws when max-bytes is not a positive integer", () => {
       for (const bad of ["abc", "0", "-5", "12abc", "1.5", " ", ""]) {
         expect(() => helpers.mapToolToMessage("page.read", { "max-bytes": bad })).toThrow(

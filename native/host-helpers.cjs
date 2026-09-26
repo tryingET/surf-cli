@@ -228,6 +228,17 @@ function formatToolContent(result, log = () => {}, options = {}) {
     ];
   }
   
+  // `page.read --nodes`: the tree text and its structured nodes, parsed into an object under --json
+  if (result.nodes !== undefined && result.pageContent !== undefined) {
+    return text(JSON.stringify({
+      pageContent: result.pageContent,
+      nodes: result.nodes,
+      viewport: result.viewport,
+      url: result.url,
+      title: result.title,
+    }));
+  }
+
   if (result.semanticObservation !== undefined) {
     return text(JSON.stringify({
       pageContent: result.pageContent,
@@ -1011,14 +1022,17 @@ function mapToolToMessage(tool, args, tabId) {
       return {
         type: "READ_PAGE",
         options: {
-          filter: a.filter || "interactive",
+          filter: a.filter || (a.all === true ? "all" : a.structure === true ? "structure" : "interactive"),
           refId: a.ref,
           includeText: a["no-text"] !== true,
           depth: a.depth !== undefined ? parseInt(a.depth, 10) : undefined,
           compact: a.compact || false,
           maxBytes,
-          forceFullSnapshot: a.compact === true || maxBytes !== undefined,
+          forceFullSnapshot: a.compact === true || maxBytes !== undefined || a.nodes === true,
           ...(a.semanticObservation === true ? { semanticObservation: true } : {}),
+          ...(a.nodes === true ? { nodes: true } : {}),
+          // the CLI rewrites --full-page to `fullpage` (the screenshot alias) before it gets here
+          ...(a.fullpage === true || a["full-page"] === true ? { fullPage: true } : {}),
         },
         ...baseMsg
       };

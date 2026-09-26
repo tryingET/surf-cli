@@ -828,6 +828,93 @@ describe("accessibility tree", () => {
     expect(staleScope).toMatchObject({ success: false, reason: "stale_scroll_scope" });
   });
 
+  function read(options: Record<string, unknown>): any {
+    let response: any;
+    messageHandler?.({ type: "GENERATE_ACCESSIBILITY_TREE", options }, {}, (result) => {
+      response = result;
+    });
+    return response;
+  }
+
+  it("returns structured nodes and never a diff when nodes are requested", () => {
+    const main = element("main");
+    const heading = element("h1");
+    heading.append(text("Releases"));
+    const nav = element("nav", { "aria-label": "Primary" });
+    const link = element("a", { href: "/tags" });
+    link.append(text("Tags"));
+    nav.append(link);
+    main.append(heading, nav);
+    (document.body as unknown as FakeElement).append(main);
+
+    const first = read({ filter: "all", fullPage: true, nodes: true });
+    expect(first.error).toBeUndefined();
+    expect(first.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "heading", name: "Releases", depth: expect.any(Number) }),
+        expect.objectContaining({ role: "navigation", name: "Primary" }),
+        expect.objectContaining({ role: "link", name: "Tags" }),
+      ]),
+    );
+    for (const node of first.nodes) {
+      expect(node.ref).toMatch(/^e\d+$/);
+      expect(first.pageContent).toContain(`[${node.ref}]`);
+    }
+    // a second read inside the 5 s window is a full snapshot, identical, with no diff
+    const second = read({ filter: "all", fullPage: true, nodes: true });
+    expect(second.isIncremental).toBe(false);
+    expect(second.diff).toBeUndefined();
+    expect(second.nodes).toEqual(first.nodes);
+    expect(second.pageContent).toBe(first.pageContent);
+
+    expect(read({ filter: "all" }).nodes).toBeUndefined();
+  });
+
+  it("fullPage reads below the viewport and still leaves hidden elements out", () => {
+    const below = element("button");
+    below.append(text("Below the fold"));
+    below.rect = { top: 5000, bottom: 5040, left: 0, right: 100 };
+    const hidden = element("button", { "aria-hidden": "true" });
+    hidden.append(text("Hidden control"));
+    const collapsed = element("button");
+    collapsed.append(text("Zero size"));
+    collapsed.offsetWidth = 0;
+    collapsed.offsetHeight = 0;
+    (document.body as unknown as FakeElement).append(below, hidden, collapsed);
+
+    expect(read({ filter: "interactive" }).pageContent).not.toContain("Below the fold");
+    const full = read({ filter: "interactive", fullPage: true }).pageContent;
+    expect(full).toContain("Below the fold");
+    expect(full).not.toContain("Hidden control");
+    expect(full).not.toContain("Zero size");
+
+    // --all alone keeps hidden elements (unchanged); with fullPage they are excluded
+    expect(read({ filter: "all" }).pageContent).toContain("Hidden control");
+    const allFull = read({ filter: "all", fullPage: true }).pageContent;
+    expect(allFull).toContain("Below the fold");
+    expect(allFull).not.toContain("Hidden control");
+  });
+
+  it("the structure filter keeps controls, headings and landmarks and drops plain text", () => {
+    const nav = element("nav", { "aria-label": "Primary" });
+    const link = element("a", { href: "/tags" });
+    link.append(text("Tags"));
+    nav.append(link);
+    const heading = element("h2");
+    heading.append(text("Latest release"));
+    const para = element("p");
+    para.append(text("Some release notes prose"));
+    (document.body as unknown as FakeElement).append(nav, heading, para);
+
+    const structure = read({ filter: "structure", fullPage: true, nodes: true });
+    const roles = structure.nodes.map((node: any) => `${node.role}:${node.name}`);
+    expect(roles).toEqual(
+      expect.arrayContaining(["navigation:Primary", "link:Tags", "heading:Latest release"]),
+    );
+    expect(structure.pageContent).not.toContain("release notes prose");
+    expect(read({ filter: "all", fullPage: true }).pageContent).toContain("release notes prose");
+  });
+
   it("caps visible text in compact mode", () => {
     (document.body as unknown as FakeElement).append(text("abcdef"));
 

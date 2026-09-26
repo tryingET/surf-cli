@@ -713,6 +713,9 @@ const TOOLS = {
           depth: "Maximum tree depth (default: unlimited)",
           compact: "Remove empty structural elements",
           "max-bytes": "Maximum visible text bytes",
+          structure: "Controls plus headings and landmarks, without the named text --all adds",
+          nodes: "Structured output: the tree plus its nodes ({ref, role, name, depth}), url and title; always a full snapshot, never a diff (use with --json)",
+          "full-page": "Include elements outside the viewport; hidden and aria-hidden elements stay out",
         },
         examples: [
           { cmd: "page.read", desc: "Interactive elements + text content" },
@@ -721,6 +724,7 @@ const TOOLS = {
           { cmd: "page.read --depth 3", desc: "Limit to 3 levels deep" },
           { cmd: "page.read --compact", desc: "Skip empty containers" },
           { cmd: "page.read --depth 3 --compact --max-bytes 2000", desc: "Shallow + compact output" },
+          { cmd: "page.read --structure --full-page --no-text --nodes --json", desc: "Whole-page structure as JSON, independent of scroll position" },
           { cmd: "read", desc: "Alias" },
         ]
       },
@@ -3022,7 +3026,7 @@ if (args[0] === "workflow.validate") {
   }
 }
 
-const BOOLEAN_FLAGS = ["auto-capture", "json", "stream", "dry-run", "stop-on-error", "fail-fast", "clear", "submit", "all", "case-sensitive", "hard", "annotate", "fullpage", "full-page", "reset", "no-screenshot", "full", "soft-fail", "has-body", "exclude-static", "v", "vv", "request", "by-tab", "har", "jsonl", "no-save", "no-auto-wait", "no-lock", "no-wait", "window", "tab", "focused", "unfocused", "keep-target", "close-target", "replace", "refresh"];
+const BOOLEAN_FLAGS = ["auto-capture", "json", "stream", "dry-run", "stop-on-error", "fail-fast", "clear", "submit", "all", "case-sensitive", "hard", "annotate", "fullpage", "full-page", "reset", "nodes", "structure", "no-screenshot", "full", "soft-fail", "has-body", "exclude-static", "v", "vv", "request", "by-tab", "har", "jsonl", "no-save", "no-auto-wait", "no-lock", "no-wait", "window", "tab", "focused", "unfocused", "keep-target", "close-target", "replace", "refresh"];
 
 const parseArgs = (rawArgs) => {
   const result = { positional: [], options: {} };

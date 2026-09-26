@@ -692,14 +692,26 @@ function getElementMap() {
   return window.__piElementMap!;
 }
 
+interface AccessibilityTreeNode {
+  ref: string;
+  role: string;
+  name: string;
+  depth: number;
+}
+
 function generateAccessibilityTree(
-  filter: "all" | "interactive" = "interactive",
+  filter: "all" | "interactive" | "structure" = "interactive",
   maxDepth = 15,
   refId?: string,
   forceFullSnapshot = false,
-  compact = false
+  compact = false,
+  fullPage = false,
+  wantNodes = false
 ): { 
   pageContent: string;
+  nodes?: AccessibilityTreeNode[];
+  url?: string;
+  title?: string;
   diff?: string;
   viewport: { width: number; height: number }; 
   error?: string;
@@ -914,13 +926,15 @@ function generateAccessibilityTree(
       return style.cursor === "pointer";
     }
 
-    function shouldInclude(element: Element, options: { filter: string; refId: string | null; compact: boolean }): boolean {
+    function shouldInclude(element: Element, options: { filter: string; refId: string | null; compact: boolean; fullPage: boolean }): boolean {
       const tag = element.tagName.toLowerCase();
       if (["script", "style", "meta", "link", "title", "noscript"].includes(tag)) return false;
-      if (options.filter !== "all" && element.getAttribute("aria-hidden") === "true") return false;
-      if (options.filter !== "all" && !isVisible(element)) return false;
+      // fullPage: every visible element on the page, wherever it is scrolled; hidden ones stay out
+      const visibleOnly = options.filter !== "all" || options.fullPage;
+      if (visibleOnly && element.getAttribute("aria-hidden") === "true") return false;
+      if (visibleOnly && !isVisible(element)) return false;
 
-      if (options.filter !== "all" && !options.refId) {
+      if (options.filter !== "all" && !options.refId && !options.fullPage) {
         const rect = element.getBoundingClientRect();
         if (!(rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0)) {
           return false;
@@ -928,6 +942,8 @@ function generateAccessibilityTree(
       }
 
       if (options.filter === "interactive") return isInteractive(element);
+      // structure: controls plus headings and landmarks, without the named prose `all` adds
+      if (options.filter === "structure") return isInteractive(element) || isLandmark(element);
       if (isInteractive(element)) return true;
       if (isLandmark(element)) return true;
       if (getName(element).length > 0) return true;
@@ -945,9 +961,11 @@ function generateAccessibilityTree(
       return role !== "generic" && role !== "img";
     }
 
+    const nodes: AccessibilityTreeNode[] = [];
+
     function traverse(element: Element, depth: number): string[] {
       const lines: string[] = [];
-      const options = { filter, refId: refId || null, compact };
+      const options = { filter, refId: refId || null, compact, fullPage };
       const elementMap = getElementMap();
 
       const include = shouldInclude(element, options) || (refId && depth === 0);
@@ -990,6 +1008,7 @@ function generateAccessibilityTree(
         if (placeholder) line += ` placeholder="${placeholder}"`;
 
         lines.push(line);
+        if (wantNodes) nodes.push({ ref: elemRefId, role, name: name.replace(/\s+/g, " "), depth });
       }
 
       if (depth < maxDepth) {
@@ -1113,7 +1132,7 @@ function generateAccessibilityTree(
     let isIncremental = false;
     const lastSnapshot = window.__piLastSnapshot;
 
-    if (!forceFullSnapshot && !refId && lastSnapshot && 
+    if (!forceFullSnapshot && !wantNodes && !refId && lastSnapshot && 
         Date.now() - lastSnapshot.timestamp < 5000) {
       const diffResult = computeSimpleDiff(lastSnapshot.content, content);
       diff = diffResult.diff;
@@ -1129,6 +1148,7 @@ function generateAccessibilityTree(
       modalStates: modalStates.length > 0 ? modalStates : undefined,
       modalLimitations: 'Only custom modals ([role=dialog]) detected. Native alert/confirm/prompt dialogs and system file choosers cannot be detected from content scripts.',
       isIncremental,
+      ...(wantNodes ? { nodes, url: window.location.href, title: document.title } : {}),
     };
   } catch (err) {
     return {
@@ -1831,7 +1851,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           options.depth ?? 15,
           options.refId,
           options.forceFullSnapshot ?? false,
-          options.compact ?? false
+          options.compact ?? false,
+          options.fullPage === true,
+          options.nodes === true
         );
         if (options.semanticObservation === true && !result.error) {
           (result as typeof result & { semanticObservation: ReturnType<typeof buildSemanticObservation> }).semanticObservation = buildSemanticObservation();
